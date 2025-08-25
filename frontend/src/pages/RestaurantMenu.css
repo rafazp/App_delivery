@@ -1,8 +1,0 @@
-/* frontend/src/pages/RestaurantMenu.css */
-
-.restaurant-page-container {
-    display: flex;
-    max-width: 1200px;
-    margin: 0 auto;
-    padding-top: 20px;
-}

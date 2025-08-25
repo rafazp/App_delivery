@@ -1,85 +1,142 @@
-// src/App.jsx
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import RestaurantList from './pages/RestaurantList';
-import RestaurantMenu from './pages/RestaurantMenu';
-import Header from './components/Header';
-import Cart from './pages/Cart';
+import axios from 'axios';
+import Sidebar from './components/Sidebar/Sidebar';
+import Header from './components/Header/Header';
+import Dashboard from './pages/Dashboard/Dashboard';
+import RestaurantMenu from './pages/RestaurantMenu/RestaurantMenu';
+import OrderSidebar from './components/OrderSidebar/OrderSidebar';
 import './App.css';
 
 function App() {
   const [cart, setCart] = useState([]);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [searchTerm, setSearchTerm] = useState(""); // 🔍 estado da busca
+  const [isOrderSidebarOpen, setIsOrderSidebarOpen] = useState(false);
+  const [restaurants, setRestaurants] = useState([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [user] = useState({
+    name: 'Patricia',
+    avatar: 'https://images.pexels.com/photos/1239291/pexels-photo-1239291.jpeg?auto=compress&cs=tinysrgb&w=100&h=100&dpr=1',
+    balance: 12000
+  });
 
-  // FUNÇÃO PARA ADICIONAR ITENS AO CARRINHO
-  const addToCart = (dish) => {
+  useEffect(() => {
+    fetchRestaurants();
+  }, []);
+
+  const fetchRestaurants = async () => {
+    try {
+      const response = await axios.get('http://127.0.0.1:8000/api/restaurants/');
+      setRestaurants(response.data);
+    } catch (error) {
+      console.error('Erro ao buscar restaurantes:', error);
+    }
+  };
+
+  const addToCart = (dish, restaurantName) => {
     setCart(prevCart => {
       const existingItem = prevCart.find(item => item.dish.id === dish.id);
       if (existingItem) {
         return prevCart.map(item =>
-          item.dish.id === dish.id ? { ...item, quantity: item.quantity + 1 } : item
+          item.dish.id === dish.id 
+            ? { ...item, quantity: item.quantity + 1 }
+            : item
         );
       }
-      return [...prevCart, { dish, quantity: 1 }];
+      return [...prevCart, { dish, quantity: 1, restaurantName }];
     });
   };
 
-  // FUNÇÃO PARA REMOVER ITENS DO CARRINHO
-  const removeItem = (dishId) => {
+  const updateQuantity = (dishId, newQuantity) => {
+    if (newQuantity <= 0) {
+      removeFromCart(dishId);
+      return;
+    }
+    setCart(prevCart =>
+      prevCart.map(item =>
+        item.dish.id === dishId
+          ? { ...item, quantity: newQuantity }
+          : item
+      )
+    );
+  };
+
+  const removeFromCart = (dishId) => {
     setCart(prevCart => prevCart.filter(item => item.dish.id !== dishId));
   };
 
-  // FUNÇÃO PARA ATUALIZAR QUANTIDADE DE ITENS
-  const updateQuantity = (dishId, amount) => {
-    setCart(prevCart => {
-      const updatedCart = prevCart.map(item =>
-        item.dish.id === dishId ? { ...item, quantity: item.quantity + amount } : item
-      ).filter(item => item.quantity > 0);
-      return updatedCart;
-    });
-  };
-
-  // FUNÇÃO PARA ALTERNAR A VISIBILIDADE DO CARRINHO
-  const toggleCart = () => {
-    setIsCartOpen(!isCartOpen);
-  };
-  
-  // FUNÇÃO PARA FINALIZAR O PEDIDO
-  const finalizeOrder = () => {
-    alert('Pedido finalizado!');
+  const clearCart = () => {
     setCart([]);
-    setIsCartOpen(false);
   };
 
-  // FUNÇÃO PARA ATUALIZAR O TERMO DE BUSCA (passada para o Header)
-  const handleSearch = (term) => {
-    setSearchTerm(term);
+  const toggleOrderSidebar = () => {
+    setIsOrderSidebarOpen(!isOrderSidebarOpen);
+  };
+
+  const getTotalItems = () => {
+    return cart.reduce((total, item) => total + item.quantity, 0);
+  };
+
+  const getTotalPrice = () => {
+    return cart.reduce((total, item) => total + (parseFloat(item.dish.price) * item.quantity), 0);
+  };
+
+  const getServiceFee = () => {
+    return getTotalPrice() * 0.1; // 10% service fee
+  };
+
+  const getFinalTotal = () => {
+    return getTotalPrice() + getServiceFee();
   };
 
   return (
     <Router>
-      <Header 
-        toggleCart={toggleCart} 
-        cartItemCount={cart.length}
-        onSearch={handleSearch} // 🔥 agora o Header pode chamar isso
-      />
-      
-      {isCartOpen && (
-        <Cart 
+      <div className="app">
+        <Sidebar />
+        <div className="main-content">
+          <Header 
+            user={user}
+            searchTerm={searchTerm}
+            onSearchChange={setSearchTerm}
+          />
+          <div className="content-wrapper">
+            <Routes>
+              <Route 
+                path="/" 
+                element={
+                  <Dashboard 
+                    restaurants={restaurants}
+                    searchTerm={searchTerm}
+                    selectedCategory={selectedCategory}
+                    onCategoryChange={setSelectedCategory}
+                    addToCart={addToCart}
+                  />
+                } 
+              />
+              <Route 
+                path="/restaurant/:id" 
+                element={
+                  <RestaurantMenu 
+                    addToCart={addToCart}
+                  />
+                } 
+              />
+            </Routes>
+          </div>
+        </div>
+        <OrderSidebar
+          isOpen={isOrderSidebarOpen}
+          onToggle={toggleOrderSidebar}
           cart={cart}
           onUpdateQuantity={updateQuantity}
-          onRemoveItem={removeItem}
-          onFinalizeOrder={finalizeOrder}
-          onCloseCart={toggleCart}
+          onRemoveItem={removeFromCart}
+          onClearCart={clearCart}
+          totalPrice={getTotalPrice()}
+          serviceFee={getServiceFee()}
+          finalTotal={getFinalTotal()}
+          userBalance={user.balance}
         />
-      )}
-      
-      <Routes>
-        {/* passa o searchTerm para RestaurantList */}
-        <Route path="/" element={<RestaurantList searchTerm={searchTerm} />} />
-        <Route path="/restaurants/:id" element={<RestaurantMenu addToCart={addToCart} />} />
-      </Routes>
+      </div>
     </Router>
   );
 }
